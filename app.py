@@ -3,17 +3,16 @@ import requests
 from bs4 import BeautifulSoup
 import nltk
 from nltk.tokenize import sent_tokenize
-from sentence_transformers import SentenceTransformer
+from transformers import BertModel, BertTokenizer
 import faiss
 import numpy as np
 from together import Together
-from transformers import pipeline
-from embeddings import HuggingFaceEmbeddings  # Import the HuggingFaceEmbeddings
 
 WIKI_URL = "https://en.wikipedia.org/wiki/Luke_Skywalker"
 TOGETHER_API_KEY = st.secrets["together"]["api_key"]
 
-summarizer = pipeline("summarization")
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+model = BertModel.from_pretrained('bert-base-uncased')
 
 @st.cache(suppress_st_warning=True)
 def scrape_wiki_page(url):
@@ -32,16 +31,21 @@ def chunk_content(content, chunk_size=5):
 
 @st.cache(suppress_st_warning=True)
 def store_chunks_in_faiss(chunks):
-    # Use the HuggingFaceEmbeddings model for generating embeddings
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={'device':'cpu'})
-    chunk_embeddings = embeddings.encode(chunks)
+    chunk_embeddings = []
+    for chunk in chunks:
+        inputs = tokenizer(chunk, return_tensors="pt", max_length=512, truncation=True)
+        outputs = model(**inputs)
+        pooled_output = outputs[1].detach().numpy()
+        chunk_embeddings.append(pooled_output[0])
     d = chunk_embeddings.shape[1]
     index = faiss.IndexFlatL2(d)
     index.add(np.array(chunk_embeddings))
-    return index, chunks, embeddings  # Return embeddings instead of SentenceTransformer model
+    return index, chunks
 
-def get_relevant_chunks(question, index, chunks, embeddings, k=3):
-    question_embedding = embeddings.encode([question])
+def get_relevant_chunks(question, index, chunks, k=3):
+    inputs = tokenizer(question, return_tensors="pt", max_length=512, truncation=True)
+    outputs = model(**inputs)
+    question_embedding = outputs[1].detach().numpy()
     distances, indices = index.search(question_embedding, k)
     return [chunks[i] for i in indices[0]]
 
@@ -71,16 +75,12 @@ st.write("Ask any question about Luke Skywalker:")
 
 content = scrape_wiki_page(WIKI_URL)
 chunks = chunk_content(content)
-index, chunks, embeddings = store_chunks_in_faiss(chunks)
+index, chunks = store_chunks_in_faiss(chunks)
 
 question = st.text_input("Your question:")
 
 if question:
-    relevant_chunks = get_relevant_chunks(question, index, chunks, embeddings)
+    relevant_chunks = get_relevant_chunks(question, index, chunks)
     context = " ".join(relevant_chunks)
     answer = generate_answer(question, context)
     st.write("Answer:", answer)
-    
-    if len(answer) > 100:
-        summary = summarizer(answer, max_length=50, min_length=25, do_sample=False)[0]['summary_text']
-        st.write("Summary:", summary)
