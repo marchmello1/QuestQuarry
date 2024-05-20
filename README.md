@@ -7,7 +7,7 @@ QuestQuarry is a streamlined application for exploring and discovering informati
 1. Clone the repository:
 
     ```bash
-    git clone https://github.com/your_username/questquarry.git
+    git clone https://github.com/marchmello1/QuestQuarry.git
     ```
 
 2. Install dependencies:
