@@ -4,7 +4,6 @@ import numpy as np
 import faiss
 import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
-# Assuming Together is a hypothetical library that you have
 from together import Together
 
 # Set Together API key
@@ -66,14 +65,14 @@ def generate_answer(question, context):
     except Exception as e:
         return f"Error generating answer: {str(e)}"
 
-# Function to summarize text using Together's API
-def summarize_text(text):
+# Function to generate summary using Together's API
+def generate_summary(answer):
     system_message = """ 
     You are not an AI language model.
-    Summarize the following text"""
+    Summarize the given answer"""
     
     messages = [{"role": "system", "content": system_message}]
-    prompt = f"Summarize this text:\n{text}"
+    prompt = f"Summarize the following answer:\n{answer}"
     messages.append({"role": "user", "content": prompt})
 
     together_client = Together(api_key=TOGETHER_API_KEY)
@@ -90,7 +89,7 @@ def summarize_text(text):
 
 # Main Streamlit app
 def main():
-    st.title("Luke Skywalker Q&A and Summarization")
+    st.title("Luke Skywalker Q&A")
 
     # Scrape and process the Wikipedia page
     url = "https://en.wikipedia.org/wiki/Luke_Skywalker"
@@ -99,19 +98,16 @@ def main():
     embeddings, vectorizer = embed_chunks(chunks)
     index = create_faiss_index(embeddings)
 
-    st.subheader("Summarize the Luke Skywalker Wikipedia Page")
-    if st.button("Summarize"):
-        summary = summarize_text(text)
-        st.write("**Summary:**", summary)
-    
-    st.subheader("Ask a question about Luke Skywalker")
-    question = st.text_input("Question:")
+    question = st.text_input("Ask a question about Luke Skywalker:")
     if question:
         top_k_chunks = retrieve_top_k_chunks(question, vectorizer, index, chunks)
         context = ' '.join(top_k_chunks)
         answer = generate_answer(question, context)
         st.write("**Answer:**", answer)
         st.write("**Context:**", context)
+        
+        summary = generate_summary(answer)
+        st.write("**Summary:**", summary)
 
 if __name__ == "__main__":
     main()
