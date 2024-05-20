@@ -1,79 +1,50 @@
-import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import nltk
-from nltk.tokenize import sent_tokenize
 import numpy as np
 import faiss
-import logging
-from transformers import pipeline
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
-from langchain_together import Together
+import streamlit as st
+from sklearn.feature_extraction.text import TfidfVectorizer
+# Assume Together is a hypothetical library that you have
+from together import Together
 
-# Constants
-WIKI_URL = "https://en.wikipedia.org/wiki/Luke_Skywalker"
+# Set Together API key
 TOGETHER_API_KEY = st.secrets["together"]["api_key"]
 
-# Initialize summarization pipeline
-summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Scrape Wikipedia page
-@st.cache_data
+# Function to scrape Wikipedia page
 def scrape_wiki_page(url):
-    try:
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        paragraphs = soup.find_all('p')
-        content = "\n".join([para.get_text() for para in paragraphs])
-        logger.info(f"Scraped content length: {len(content)}")
-        return content
-    except Exception as e:
-        logger.error(f"Error scraping wiki page: {str(e)}")
-        return ""
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    content = soup.find_all('p')
+    text = ' '.join([para.text for para in content])
+    return text
 
-# Chunk the content
-@st.cache_data
-def chunk_content(content, chunk_size=2):
-    try:
-        nltk.download('punkt')
-        sentences = sent_tokenize(content)
-        chunks = [' '.join(sentences[i:i + chunk_size]) for i in range(0, len(sentences), chunk_size)]
-        logger.info(f"Created {len(chunks)} chunks")
-        return chunks
-    except Exception as e:
-        logger.error(f"Error chunking content: {str(e)}")
-        return []
+# Function to chunk text
+def chunk_text(text, chunk_size=200):
+    words = text.split()
+    chunks = [' '.join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+    return chunks
 
-# Store chunks in Faiss vector database using LangChain
-@st.cache_resource
-def store_chunks_in_faiss(chunks):
-    try:
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2",
-                                           model_kwargs={'device': 'cpu'})
-        vector_store = FAISS.from_texts(chunks, embeddings)
-        logger.info("Stored chunks in Faiss index with LangChain")
-        return vector_store
-    except Exception as e:
-        logger.error(f"Error storing chunks in Faiss: {str(e)}")
-        return None
+# Function to embed chunks using TfidfVectorizer
+def embed_chunks(chunks):
+    vectorizer = TfidfVectorizer()
+    embeddings = vectorizer.fit_transform(chunks).toarray()
+    return embeddings, vectorizer
 
-# Retrieve relevant chunks
-def get_relevant_chunks(question, vector_store, k=3):
-    try:
-        question_embedding = vector_store.embedding_function(question)
-        distances, indices = vector_store.index.search(np.array([question_embedding]), k)
-        logger.info(f"Retrieved {len(indices[0])} relevant chunks")
-        return [vector_store.texts[i] for i in indices[0]]
-    except Exception as e:
-        logger.error(f"Error retrieving relevant chunks: {str(e)}")
-        return []
+# Function to create and populate Faiss index
+def create_faiss_index(embeddings):
+    dimension = embeddings.shape[1]
+    index = faiss.IndexFlatL2(dimension)
+    index.add(np.array(embeddings, dtype=np.float32))
+    return index
 
-# Generate answer using Together API with Mistral model
+# Function to retrieve top k chunks
+def retrieve_top_k_chunks(question, vectorizer, index, chunks, k=3):
+    question_embedding = vectorizer.transform([question]).toarray()
+    D, I = index.search(question_embedding.astype(np.float32), k)
+    top_k_chunks = [chunks[i] for i in I[0]]
+    return top_k_chunks
+
+# Function to generate answer using Together's API
 def generate_answer(question, context):
     system_message = """ 
     You are not an AI language model.
@@ -83,42 +54,28 @@ def generate_answer(question, context):
     prompt = f"{question}\n{context}"
     messages.append({"role": "user", "content": prompt})
 
-    together_client = Together(
-        model="mistralai/Mixtral-8x7B-Instruct-v0.1",
-        together_api_key=TOGETHER_API_KEY
-    )
-    
-    try:
-        response = together_client.invoke(prompt)
-        logger.info("Generated answer successfully")
-        return response
-    except Exception as e:
-        logger.error(f"Error generating answer: {str(e)}")
-        return f"Error generating answer: {str(e)}"
+    together_client = Together(api_key=TOGETHER_API_KEY)
+    response = together_client.complete(messages=messages)
+    return response['choices'][0]['message']['content'].strip()
 
 # Main Streamlit app
-st.title("QuestQuarry")
-st.write("Ask any question about Luke Skywalker:")
+def main():
+    st.title("Luke Skywalker Q&A")
 
-# Scrape and process the content
-content = scrape_wiki_page(WIKI_URL)
-if content:
-    chunks = chunk_content(content)
-    if chunks:
-        vector_store = store_chunks_in_faiss(chunks)
+    # Scrape and process the Wikipedia page
+    url = "https://en.wikipedia.org/wiki/Luke_Skywalker"
+    text = scrape_wiki_page(url)
+    chunks = chunk_text(text)
+    embeddings, vectorizer = embed_chunks(chunks)
+    index = create_faiss_index(embeddings)
 
-        # User input
-        question = st.text_input("Your question:")
+    question = st.text_input("Ask a question about Luke Skywalker:")
+    if question:
+        top_k_chunks = retrieve_top_k_chunks(question, vectorizer, index, chunks)
+        context = ' '.join(top_k_chunks)
+        answer = generate_answer(question, context)
+        st.write("**Answer:**", answer)
+        st.write("**Context:**", context)
 
-        if question:
-            relevant_chunks = get_relevant_chunks(question, vector_store)
-            context = " ".join(relevant_chunks)
-            answer = generate_answer(question, context)
-            st.write("Answer:", answer)
-            
-            # Text summarization
-            if len(answer) > 100:
-                summary = summarizer(answer, max_length=50, min_length=25, do_sample=False)[0]['summary_text']
-                st.write("Summary:", summary)
-else:
-    st.write("Error loading content.")
+if __name__ == "__main__":
+    main()
