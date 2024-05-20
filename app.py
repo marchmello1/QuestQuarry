@@ -4,11 +4,12 @@ import numpy as np
 import faiss
 import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
-# Assume Together is a hypothetical library that you have
+from transformers import pipeline
+# Assuming Together is a hypothetical library that you have
 from together import Together
 
 # Set Together API key
-TOGETHER_API_KEY = st.secrets["together"]["api_key"]
+TOGETHER_API_KEY = st.secrets["streamlit"]["openai_api_key"]
 
 # Function to scrape Wikipedia page
 def scrape_wiki_page(url):
@@ -77,12 +78,19 @@ def main():
     embeddings, vectorizer = embed_chunks(chunks)
     index = create_faiss_index(embeddings)
 
+    summarizer = pipeline("summarization")
+
     question = st.text_input("Ask a question about Luke Skywalker:")
     if question:
         top_k_chunks = retrieve_top_k_chunks(question, vectorizer, index, chunks)
         context = ' '.join(top_k_chunks)
         answer = generate_answer(question, context)
         st.write("**Answer:**", answer)
+        
+        # Text summarization
+        if len(answer) > 100:
+            summary = summarizer(answer, max_length=50, min_length=25, do_sample=False)[0]['summary_text']
+            st.write("**Summary:**", summary)
         st.write("**Context:**", context)
 
 if __name__ == "__main__":
