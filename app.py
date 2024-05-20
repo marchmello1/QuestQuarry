@@ -55,7 +55,7 @@ def generate_answer(question, context):
     messages.append({"role": "user", "content": prompt})
 
     together_client = Together(api_key=TOGETHER_API_KEY)
-    response = together_client.chat.completions.create(
+    response = together_client.chat.completions.create
     return response.choices[0].message.content
 
 # Main Streamlit app
