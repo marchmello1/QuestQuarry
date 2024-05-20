@@ -29,7 +29,7 @@ def chunk_content(content, chunk_size=5):
     chunks = [' '.join(sentences[i:i + chunk_size]) for i in range(0, len(sentences), chunk_size)]
     return chunks
 
-@st.cache(suppress_st_warning=True)
+@st.cache(hash_funcs={tokenizers.AddedToken: my_hash_func})
 def store_chunks_in_faiss(chunks):
     chunk_embeddings = []
     for chunk in chunks:
