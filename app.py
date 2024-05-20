@@ -14,7 +14,7 @@ TOGETHER_API_KEY = st.secrets["together"]["api_key"]
 
 summarizer = pipeline("summarization")
 
-@st.cache
+@st.cache(suppress_st_warning=True)
 def scrape_wiki_page(url):
     response = requests.get(url)
     soup = BeautifulSoup(response.content, 'html.parser')
@@ -22,14 +22,14 @@ def scrape_wiki_page(url):
     content = "\n".join([para.get_text() for para in paragraphs])
     return content
 
-@st.cache
+@st.cache(suppress_st_warning=True)
 def chunk_content(content, chunk_size=5):
     nltk.download('punkt')
     sentences = sent_tokenize(content)
     chunks = [' '.join(sentences[i:i + chunk_size]) for i in range(0, len(sentences), chunk_size)]
     return chunks
 
-@st.cache
+@st.cache(suppress_st_warning=True)
 def store_chunks_in_faiss(chunks):
     model = SentenceTransformer('all-MiniLM-L6-v2')
     chunk_embeddings = model.encode(chunks)
