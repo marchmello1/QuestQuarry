@@ -31,7 +31,7 @@ def chunk_content(content, chunk_size=5):
 
 @st.cache(suppress_st_warning=True)
 def store_chunks_in_faiss(chunks):
-    model = SentenceTransformer('all-MiniLM-L6-v2')
+    model = SentenceTransformer('distiluse-base-multilingual-cased-v2')
     chunk_embeddings = model.encode(chunks)
     d = chunk_embeddings.shape[1]
     index = faiss.IndexFlatL2(d)
