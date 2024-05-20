@@ -1,9 +1,9 @@
 beautifulsoup4==4.10.0
-faiss-cpu==1.7.1
+faiss-cpu==1.8.0
 nltk==3.6.5
 numpy
-requests
+requests==2.31.0
 sentence-transformers==2.1.0
 streamlit==1.5.0
 together==1.1.2
-transformers
+transformers==4.41.0
