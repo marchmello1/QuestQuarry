@@ -9,7 +9,8 @@ from transformers import pipeline
 from together import Together
 
 # Set Together API key
-TOGETHER_API_KEY = st.secrets["streamlit"]["openai_api_key"]
+TOGETHER_API_KEY = st.secrets["together"]["api_key"]
+
 
 # Function to scrape Wikipedia page
 def scrape_wiki_page(url):
