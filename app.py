@@ -9,7 +9,7 @@ import logging
 from transformers import pipeline
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
-from langchain.llms import Together
+from langchain_together import Together
 
 # Constants
 WIKI_URL = "https://en.wikipedia.org/wiki/Luke_Skywalker"
@@ -54,7 +54,7 @@ def chunk_content(content, chunk_size=2):
 def store_chunks_in_faiss(chunks):
     try:
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2",
-                                           model_kwargs={'device':'cpu'})
+                                           model_kwargs={'device': 'cpu'})
         vector_store = FAISS.from_texts(chunks, embeddings)
         logger.info("Stored chunks in Faiss index with LangChain")
         return vector_store
@@ -83,16 +83,15 @@ def generate_answer(question, context):
     prompt = f"{question}\n{context}"
     messages.append({"role": "user", "content": prompt})
 
-    together_client = Together(api_key=TOGETHER_API_KEY)
+    together_client = Together(
+        model="mistralai/Mixtral-8x7B-Instruct-v0.1",
+        together_api_key=TOGETHER_API_KEY
+    )
     
     try:
-        response = together_client.chat.completions.create(
-            model="mistralai/Mixtral-8x7B-Instruct-v0.1",
-            messages=messages,
-        )
-        answer = response.choices[0].message.content
+        response = together_client.invoke(prompt)
         logger.info("Generated answer successfully")
-        return answer
+        return response
     except Exception as e:
         logger.error(f"Error generating answer: {str(e)}")
         return f"Error generating answer: {str(e)}"
