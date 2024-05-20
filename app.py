@@ -9,8 +9,6 @@ import numpy as np
 
 WIKI_URL = "https://en.wikipedia.org/wiki/Luke_Skywalker"
 
-summarizer = pipeline("summarization")
-
 @st.cache_data
 def scrape_wiki_page(url):
     response = requests.get(url)
