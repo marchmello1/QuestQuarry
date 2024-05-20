@@ -46,8 +46,7 @@ def retrieve_top_k_chunks(question, vectorizer, index, chunks, k=3):
 # Function to generate answer using Together's API
 def generate_answer(question, context):
     system_message = """ 
-    You are not an AI language model.
-    Answer only from chunks"""
+    You are not an AI language model"""
     
     messages = [{"role": "system", "content": system_message}]
     prompt = f"{question}\n{context}"
