@@ -60,7 +60,3 @@ if question:
     context = " ".join(relevant_chunks)
     answer = generate_answer(question, context)
     st.write("Answer:", answer)
-    
-    if len(answer) > 100:
-        summary = summarizer(answer, max_length=50, min_length=25, do_sample=False)[0]['summary_text']
-        st.write("Summary:", summary)
