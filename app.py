@@ -3,14 +3,11 @@ import requests
 from bs4 import BeautifulSoup
 import nltk
 from nltk.tokenize import sent_tokenize
-from sentence_transformers import SentenceTransformer
+from transformers import AutoModel, AutoTokenizer
 import faiss
 import numpy as np
-from together import Together
-from transformers import pipeline
 
 WIKI_URL = "https://en.wikipedia.org/wiki/Luke_Skywalker"
-TOGETHER_API_KEY = st.secrets["together"]["api_key"]
 
 summarizer = pipeline("summarization")
 
@@ -31,38 +28,25 @@ def chunk_content(content, chunk_size=5):
 
 @st.cache_resource
 def store_chunks_in_faiss(chunks):
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    chunk_embeddings = model.encode(chunks)
+    model_name = "sentence-transformers/all-mpnet-base-v2"  # Lighter model
+    model = AutoModel.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    chunk_embeddings = model(**tokenizer(chunks, padding=True, return_tensors="pt")).pooler_output.cpu().detach().numpy()
     d = chunk_embeddings.shape[1]
     index = faiss.IndexFlatL2(d)
     index.add(np.array(chunk_embeddings))
     return index, chunks, model
 
 def get_relevant_chunks(question, index, chunks, model, k=3):
-    question_embedding = model.encode([question])
+    question_embedding = model(**tokenizer([question], padding=True, return_tensors="pt")).pooler_output.cpu().detach().numpy()
     distances, indices = index.search(question_embedding, k)
     return [chunks[i] for i in indices[0]]
 
 def generate_answer(question, context):
-    system_message = """ 
-    You are not an AI language model.
-    Answer only from chunks"""
-    
-    messages = [{"role": "system", "content": system_message}]
-    prompt = f"{question}\n{context}"
-    messages.append({"role": "user", "content": prompt})
-
-    together_client = Together(api_key=TOGETHER_API_KEY)
-    
-    try:
-        response = together_client.chat.completions.create(
-            model="mistralai/Mixtral-8x7B-Instruct-v0.1",
-            messages=messages,
-        )
-        answer = response.choices[0].message.content
-        return answer
-    except Exception as e:
-        return f"Error generating answer: {str(e)}"
+    # No Together integration here, answer directly from context
+    answer = f"Based on the provided passage about Luke Skywalker, here's what I found relevant to your question: {context}"
+    return answer
 
 st.title("Luke Skywalker Q&A")
 st.write("Ask any question about Luke Skywalker:")
