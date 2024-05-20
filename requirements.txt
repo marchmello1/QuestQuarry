@@ -8,3 +8,4 @@ langchain
 langchain_together
 langchain-community
 transformers
+together
