@@ -3,19 +3,20 @@ import requests
 from bs4 import BeautifulSoup
 import nltk
 from nltk.tokenize import sent_tokenize
-from sentence_transformers import SentenceTransformer
-import faiss
 import numpy as np
-from together import Together
-from transformers import pipeline
+import faiss
 import logging
+from transformers import pipeline
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.llms import Together
 
 # Constants
 WIKI_URL = "https://en.wikipedia.org/wiki/Luke_Skywalker"
 TOGETHER_API_KEY = st.secrets["together"]["api_key"]
 
 # Initialize summarization pipeline
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -37,7 +38,7 @@ def scrape_wiki_page(url):
 
 # Chunk the content
 @st.cache_data
-def chunk_content(content, chunk_size=3):
+def chunk_content(content, chunk_size=2):
     try:
         nltk.download('punkt')
         sentences = sent_tokenize(content)
@@ -48,28 +49,26 @@ def chunk_content(content, chunk_size=3):
         logger.error(f"Error chunking content: {str(e)}")
         return []
 
-# Store chunks in Faiss vector database
+# Store chunks in Faiss vector database using LangChain
 @st.cache_resource
 def store_chunks_in_faiss(chunks):
     try:
-        model = SentenceTransformer('all-MiniLM-L6-v2')
-        chunk_embeddings = model.encode(chunks)
-        d = chunk_embeddings.shape[1]
-        index = faiss.IndexFlatL2(d)
-        index.add(np.array(chunk_embeddings))
-        logger.info("Stored chunks in Faiss index")
-        return index, chunks, model
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2",
+                                           model_kwargs={'device':'cpu'})
+        vector_store = FAISS.from_texts(chunks, embeddings)
+        logger.info("Stored chunks in Faiss index with LangChain")
+        return vector_store
     except Exception as e:
         logger.error(f"Error storing chunks in Faiss: {str(e)}")
-        return None, [], None
+        return None
 
 # Retrieve relevant chunks
-def get_relevant_chunks(question, index, chunks, model, k=3):
+def get_relevant_chunks(question, vector_store, k=3):
     try:
-        question_embedding = model.encode([question])
-        distances, indices = index.search(question_embedding, k)
+        question_embedding = vector_store.embedding_function(question)
+        distances, indices = vector_store.index.search(np.array([question_embedding]), k)
         logger.info(f"Retrieved {len(indices[0])} relevant chunks")
-        return [chunks[i] for i in indices[0]]
+        return [vector_store.texts[i] for i in indices[0]]
     except Exception as e:
         logger.error(f"Error retrieving relevant chunks: {str(e)}")
         return []
@@ -107,13 +106,13 @@ content = scrape_wiki_page(WIKI_URL)
 if content:
     chunks = chunk_content(content)
     if chunks:
-        index, chunks, model = store_chunks_in_faiss(chunks)
+        vector_store = store_chunks_in_faiss(chunks)
 
         # User input
         question = st.text_input("Your question:")
 
         if question:
-            relevant_chunks = get_relevant_chunks(question, index, chunks, model)
+            relevant_chunks = get_relevant_chunks(question, vector_store)
             context = " ".join(relevant_chunks)
             answer = generate_answer(question, context)
             st.write("Answer:", answer)
