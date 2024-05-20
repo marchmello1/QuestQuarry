@@ -6,10 +6,10 @@ import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
 from together import Together
 
-# Set Together API key
+
 TOGETHER_API_KEY = st.secrets["together"]["api_key"]
 
-# Function to scrape Wikipedia page
+
 def scrape_wiki_page(url):
     response = requests.get(url)
     soup = BeautifulSoup(response.content, 'html.parser')
@@ -17,33 +17,33 @@ def scrape_wiki_page(url):
     text = ' '.join([para.text for para in content])
     return text
 
-# Function to chunk text
+
 def chunk_text(text, chunk_size=200):
     words = text.split()
     chunks = [' '.join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
     return chunks
 
-# Function to embed chunks using TfidfVectorizer
+
 def embed_chunks(chunks):
     vectorizer = TfidfVectorizer()
     embeddings = vectorizer.fit_transform(chunks).toarray()
     return embeddings, vectorizer
 
-# Function to create and populate Faiss index
+
 def create_faiss_index(embeddings):
     dimension = embeddings.shape[1]
     index = faiss.IndexFlatL2(dimension)
     index.add(np.array(embeddings, dtype=np.float32))
     return index
 
-# Function to retrieve top k chunks
+
 def retrieve_top_k_chunks(question, vectorizer, index, chunks, k=3):
     question_embedding = vectorizer.transform([question]).toarray()
     D, I = index.search(question_embedding.astype(np.float32), k)
     top_k_chunks = [chunks[i] for i in I[0]]
     return top_k_chunks
 
-# Function to generate answer using Together's API
+
 def generate_answer(question, context):
     system_message = """ 
     You are not an AI language model.
@@ -65,7 +65,7 @@ def generate_answer(question, context):
     except Exception as e:
         return f"Error generating answer: {str(e)}"
 
-# Function to generate summary using Together's API
+
 def generate_summary(answer):
     system_message = """ 
     You are not an AI language model.
@@ -87,11 +87,10 @@ def generate_summary(answer):
     except Exception as e:
         return f"Error generating summary: {str(e)}"
 
-# Main Streamlit app
-def main():
-    st.title("Luke Skywalker Q&A")
 
-    # Scrape and process the Wikipedia page
+def main():
+    st.title("Qilo Q&A App")
+
     url = "https://en.wikipedia.org/wiki/Luke_Skywalker"
     text = scrape_wiki_page(url)
     chunks = chunk_text(text)
