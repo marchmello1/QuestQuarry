@@ -18,7 +18,7 @@ def scrape_wiki_page(url):
     return content
 
 @st.cache_data
-def chunk_content(content, chunk_size=5):
+def chunk_content(content, chunk_size=2):
     nltk.download('punkt')
     sentences = sent_tokenize(content)
     chunks = [' '.join(sentences[i:i + chunk_size]) for i in range(0, len(sentences), chunk_size)]
