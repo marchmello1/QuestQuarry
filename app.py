@@ -22,7 +22,7 @@ def scrape_wiki_page(url):
     content = "\n".join([para.get_text() for para in paragraphs])
     return content
 
-@st.cache_data
+@st.cache
 def chunk_content(content, chunk_size=5):
     nltk.download('punkt')
     sentences = sent_tokenize(content)
