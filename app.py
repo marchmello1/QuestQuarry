@@ -8,6 +8,7 @@ import faiss
 import numpy as np
 from together import Together
 from transformers import pipeline
+from embeddings import HuggingFaceEmbeddings  # Import the HuggingFaceEmbeddings
 
 WIKI_URL = "https://en.wikipedia.org/wiki/Luke_Skywalker"
 TOGETHER_API_KEY = st.secrets["together"]["api_key"]
@@ -31,15 +32,16 @@ def chunk_content(content, chunk_size=5):
 
 @st.cache(suppress_st_warning=True)
 def store_chunks_in_faiss(chunks):
-    model = SentenceTransformer('distiluse-base-multilingual-cased-v2')
-    chunk_embeddings = model.encode(chunks)
+    # Use the HuggingFaceEmbeddings model for generating embeddings
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={'device':'cpu'})
+    chunk_embeddings = embeddings.encode(chunks)
     d = chunk_embeddings.shape[1]
     index = faiss.IndexFlatL2(d)
     index.add(np.array(chunk_embeddings))
-    return index, chunks, model
+    return index, chunks, embeddings  # Return embeddings instead of SentenceTransformer model
 
-def get_relevant_chunks(question, index, chunks, model, k=3):
-    question_embedding = model.encode([question])
+def get_relevant_chunks(question, index, chunks, embeddings, k=3):
+    question_embedding = embeddings.encode([question])
     distances, indices = index.search(question_embedding, k)
     return [chunks[i] for i in indices[0]]
 
@@ -69,12 +71,16 @@ st.write("Ask any question about Luke Skywalker:")
 
 content = scrape_wiki_page(WIKI_URL)
 chunks = chunk_content(content)
-index, chunks, model = store_chunks_in_faiss(chunks)
+index, chunks, embeddings = store_chunks_in_faiss(chunks)
 
 question = st.text_input("Your question:")
 
 if question:
-    relevant_chunks = get_relevant_chunks(question, index, chunks, model)
+    relevant_chunks = get_relevant_chunks(question, index, chunks, embeddings)
     context = " ".join(relevant_chunks)
     answer = generate_answer(question, context)
     st.write("Answer:", answer)
+    
+    if len(answer) > 100:
+        summary = summarizer(answer, max_length=50, min_length=25, do_sample=False)[0]['summary_text']
+        st.write("Summary:", summary)
